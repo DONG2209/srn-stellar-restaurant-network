@@ -1,0 +1,239 @@
+name: CI/CD Pipeline - SRN Level 4
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master]
+
+env:
+  NODE_VERSION: '20'
+  RUST_VERSION: 'stable'
+
+jobs:
+  # ==================== Smart Contract Tests (All 3 contracts) ====================
+  contract-test:
+    name: Contract Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        contract: [restaurant, loyalty-token, restaurant-registry]
+    defaults:
+      run:
+        working-directory: contracts/${{ matrix.contract }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            contracts/${{ matrix.contract }}/target
+          key: ${{ runner.os }}-cargo-${{ matrix.contract }}-${{ hashFiles(format('contracts/{0}/Cargo.lock', matrix.contract)) }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ matrix.contract }}-
+
+      - name: Run contract tests
+        run: cargo test --verbose
+
+      - name: Build contract
+        run: cargo build --target wasm32-unknown-unknown --release
+
+      - name: Upload contract artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.contract }}-contract
+          path: contracts/${{ matrix.contract }}/target/wasm32-unknown-unknown/release/*.wasm
+
+  # ==================== Frontend Tests ====================
+  frontend-test:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run linting
+        run: npx tsc --noEmit
+
+      - name: Run frontend tests
+        run: npm test -- --run
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Upload frontend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: frontend/dist
+
+  # ==================== Deploy to Netlify ====================
+  deploy:
+    name: Deploy to Netlify
+    runs-on: ubuntu-latest
+    needs: [contract-test, frontend-test]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Check Netlify secrets
+        id: check-secrets
+        run: |
+          if [ -z "$NETLIFY_AUTH_TOKEN" ] || [ -z "$NETLIFY_SITE_ID" ]; then
+            echo "available=false" >> $GITHUB_OUTPUT
+            echo "::warning::Netlify secrets not configured — skipping deploy"
+          else
+            echo "available=true" >> $GITHUB_OUTPUT
+          fi
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+
+      - name: Deploy to Netlify
+        if: steps.check-secrets.outputs.available == 'true'
+        uses: nwtgck/actions-netlify@v3
+        with:
+          publish-dir: './frontend/dist'
+          production-branch: main
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          deploy-message: "Deploy from GitHub Actions"
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+
+      - name: Upload frontend artifact (fallback)
+        if: steps.check-secrets.outputs.available != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build-deploy
+          path: frontend/dist
+
+  # ==================== Contract Deployment (Automated) ====================
+  deploy-contract:
+    name: Deploy Contract to Testnet
+    runs-on: ubuntu-latest
+    needs: [contract-test]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            contracts/restaurant/target
+          key: ${{ runner.os }}-cargo-deploy-${{ hashFiles('contracts/restaurant/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-deploy-
+
+      - name: Install Stellar CLI (pre-built binary)
+        run: |
+          STELLAR_VERSION="27.0.0"
+          curl -sL "https://github.com/stellar/stellar-cli/releases/download/v${STELLAR_VERSION}/stellar-cli-${STELLAR_VERSION}-x86_64-unknown-linux-gnu.tar.gz" -o /tmp/stellar.tar.gz
+          tar -xzf /tmp/stellar.tar.gz -C /tmp
+          sudo mv /tmp/stellar /usr/local/bin/stellar
+          chmod +x /usr/local/bin/stellar
+          stellar --version
+
+      - name: Build contract
+        working-directory: contracts/restaurant
+        run: |
+          cargo build --target wasm32-unknown-unknown --release
+          echo "Contract built successfully"
+          ls -la target/wasm32-unknown-unknown/release/
+
+      - name: Check Stellar secret key
+        id: check-key
+        run: |
+          if [ -z "$STELLAR_SECRET_KEY" ]; then
+            echo "available=false" >> $GITHUB_OUTPUT
+            echo "::warning::STELLAR_SECRET_KEY not set — skipping contract deploy"
+          else
+            echo "available=true" >> $GITHUB_OUTPUT
+          fi
+        env:
+          STELLAR_SECRET_KEY: ${{ secrets.STELLAR_SECRET_KEY }}
+
+      - name: Deploy contract to testnet
+        if: steps.check-key.outputs.available == 'true'
+        working-directory: contracts/restaurant
+        run: |
+          if [ -z "$STELLAR_SECRET_KEY" ]; then
+            exit 0
+          fi
+
+          echo "Adding Stellar identity from secret key..."
+          stellar keys add deployer --secret-key "$STELLAR_SECRET_KEY"
+
+          echo "Deploying contract to testnet..."
+          CONTRACT_ID=$(stellar contract deploy \
+            --wasm target/wasm32-unknown-unknown/release/restaurant_contract.wasm \
+            --source deployer \
+            --network testnet 2>&1 | tail -1)
+
+          echo "✅ Contract deployed!"
+          echo "Contract ID: $CONTRACT_ID"
+          echo "CONTRACT_ID=$CONTRACT_ID" >> $GITHUB_ENV
+
+      - name: Log deployment summary
+        if: steps.check-key.outputs.available == 'true'
+        run: |
+          echo "### 🚀 Contract Deployed" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| Contract ID | \`${{ env.CONTRACT_ID }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Network | Testnet |" >> $GITHUB_STEP_SUMMARY
+          echo "| Explorer | [View](https://stellar.expert/explorer/testnet/contract/${{ env.CONTRACT_ID }}) |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Show manual deploy instructions (secret not configured)
+        if: steps.check-key.outputs.available != 'true'
+        run: |
+          echo "### 📋 Contract Deploy — Manual Instructions" >> $GITHUB_STEP_SUMMARY
+          echo "Add \`STELLAR_SECRET_KEY\` to GitHub Secrets to enable automatic deployment." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Steps:**" >> $GITHUB_STEP_SUMMARY
+          echo "1. Fund a testnet account at https://laboratory.stellar.org" >> $GITHUB_STEP_SUMMARY
+          echo "2. Add the secret key to repo Settings → Secrets → Actions" >> $GITHUB_STEP_SUMMARY
+          echo "3. Re-run this workflow" >> $GITHUB_STEP_SUMMARY

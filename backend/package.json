@@ -1,0 +1,20 @@
+{
+  "name": "srn-backend",
+  "version": "1.0.0",
+  "description": "SRN Backend - Stellar Restaurant Network anchor integration, DEX path finding, and analytics",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "build": "tsc",
+    "test": "jest"
+  },
+  "dependencies": {
+    "stellar-sdk": "^12.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.4.0"
+  }
+}

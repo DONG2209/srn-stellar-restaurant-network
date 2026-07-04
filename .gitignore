@@ -1,0 +1,23 @@
+# Rust
+contracts/*/target/
+**/*.rs.bk
+*.pdb
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+node_modules/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+
+# Env
+.env
+.env.local
+.vercel
