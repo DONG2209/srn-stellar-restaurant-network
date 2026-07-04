@@ -132,9 +132,9 @@ export default function MenuList({ walletConnected, onSelectItem }: MenuListProp
             </div>
             <div className="text-right">
               <p className="text-stellar-primary font-bold">
-                {(item.price / 10_000_000).toFixed(2)} XLM
+                {(Number(item.price) / 10_000_000).toFixed(2)} XLM
               </p>
-              <p className="text-white/30 text-xs">{item.price.toLocaleString()} stroops</p>
+              <p className="text-white/30 text-xs">{Number(item.price).toLocaleString()} stroops</p>
             </div>
           </div>
         ))}

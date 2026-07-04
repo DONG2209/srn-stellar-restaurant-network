@@ -156,7 +156,7 @@ export default function OrderHistory({ demoOrders, onClearAll }: OrderHistoryPro
                   {demo.itemDetails.map((d, i) => (
                     <div key={i} className="flex justify-between text-white/55 text-xs">
                       <span>{d.quantity || 1}× {d.name}</span>
-                      <span className="font-mono">{(d.price / 10_000_000).toFixed(2)} XLM</span>
+                      <span className="font-mono">{(Number(d.price) / 10_000_000).toFixed(2)} XLM</span>
                     </div>
                   ))}
                 </div>

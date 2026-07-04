@@ -38,7 +38,7 @@ export function useDemoOrders(publicKey: string | null) {
       }));
 
       const totalAmount = items.reduce(
-        (sum, { item, quantity }) => sum + item.price * quantity,
+        (sum, { item, quantity }) => sum + Number(item.price) * quantity,
         0
       );
 

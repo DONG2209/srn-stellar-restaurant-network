@@ -104,13 +104,13 @@ export default function App() {
 
   const cartItems = Array.from(selectedItems.values());
   const total = cartItems.reduce(
-    (sum, { item, quantity }) => sum + item.price * quantity,
+    (sum, { item, quantity }) => sum + Number(item.price) * quantity,
     0
   );
 
   const demoStats = {
     totalOrders: demoOrders.length,
-    totalRevenue: demoOrders.reduce((sum, o) => sum + o.total_amount, 0),
+    totalRevenue: demoOrders.reduce((sum, o) => sum + Number(o.total_amount), 0),
   };
 
   return (

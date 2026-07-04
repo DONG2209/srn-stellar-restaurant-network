@@ -207,7 +207,7 @@ export default function OrderForm({
             <div className="flex-1 min-w-0">
               <p className="text-white font-medium truncate">{item.name}</p>
               <p className="text-white/40 text-xs">
-                {(item.price / 10_000_000).toFixed(2)} XLM each
+                {(Number(item.price) / 10_000_000).toFixed(2)} XLM each
               </p>
             </div>
             <div className="flex items-center gap-2 ml-3">
