@@ -46,6 +46,15 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [activeSection, setActiveSection] = useState<'overview' | 'orders' | 'loyalty' | 'settings'>('overview');
 
+  // Settings state
+  const [isOpen, setIsOpen] = useState(true);
+  const [earnRate, setEarnRate] = useState(500); // basis points
+  const [editingRate, setEditingRate] = useState(false);
+  const [rateInput, setRateInput] = useState('500');
+  const [activeCurrencies, setActiveCurrencies] = useState<string[]>(['USDC', 'VND', 'JPY', 'THB', 'IDR']);
+  const [showWithdrawConfirm, setShowWithdrawConfirm] = useState(false);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+
   const contractClient = getContractClient();
 
   useEffect(() => {
@@ -396,40 +405,144 @@ export default function AdminDashboard() {
       {activeSection === 'settings' && (
         <div className="card space-y-4">
           <h3 className="text-white font-bold mb-4">⚙️ Restaurant Settings</h3>
+
+          {/* Toast notification */}
+          {toastMsg && (
+            <div className="bg-green-500/20 text-green-400 text-sm rounded-lg px-4 py-3 flex items-center justify-between">
+              <span>{toastMsg}</span>
+              <button onClick={() => setToastMsg(null)} className="text-white/50 hover:text-white ml-2">✕</button>
+            </div>
+          )}
+
+          {/* Withdraw confirmation modal */}
+          {showWithdrawConfirm && (
+            <div className="bg-stellar-primary/10 border border-stellar-primary/30 rounded-lg p-4 space-y-3">
+              <p className="text-white text-sm font-medium">Confirm Withdrawal</p>
+              <p className="text-white/70 text-xs">Withdraw ${formatAmount(analytics?.totalRevenue || 0)} to your admin wallet?</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setShowWithdrawConfirm(false); setToastMsg('✅ Withdrawn $' + formatAmount(analytics?.totalRevenue || 0) + ' successfully!'); }}
+                  className="px-4 py-2 bg-stellar-primary text-white rounded-lg text-sm font-medium hover:bg-stellar-primary/80 transition-colors"
+                >
+                  Confirm
+                </button>
+                <button
+                  onClick={() => setShowWithdrawConfirm(false)}
+                  className="px-4 py-2 bg-white/10 text-white/70 rounded-lg text-sm hover:bg-white/20 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="space-y-3">
+            {/* Restaurant Status */}
             <div className="flex items-center justify-between py-3 border-b border-white/10">
               <div>
                 <p className="text-white font-medium text-sm">Restaurant Status</p>
-                <p className="text-white/40 text-xs">Open or close your restaurant</p>
+                <p className="text-white/40 text-xs">{isOpen ? 'Accepting orders' : 'Currently closed'}</p>
               </div>
-              <button className="px-4 py-2 bg-green-500/20 text-green-400 rounded-lg text-sm font-medium hover:bg-green-500/30 transition-colors">
-                🟢 Open
+              <button
+                onClick={() => { setIsOpen(!isOpen); setToastMsg(isOpen ? '🔴 Restaurant closed' : '🟢 Restaurant opened!'); }}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  isOpen ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30' : 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
+                }`}
+              >
+                {isOpen ? '🟢 Open' : '🔴 Closed'}
               </button>
             </div>
+
+            {/* Loyalty Earn Rate */}
             <div className="flex items-center justify-between py-3 border-b border-white/10">
               <div>
                 <p className="text-white font-medium text-sm">Loyalty Earn Rate</p>
-                <p className="text-white/40 text-xs">Current: 5.0% (500 bps)</p>
+                <p className="text-white/40 text-xs">Current: {(earnRate / 100).toFixed(1)}% ({earnRate} bps)</p>
               </div>
-              <button className="px-4 py-2 bg-white/10 text-white/70 rounded-lg text-sm hover:bg-white/20 transition-colors">
-                Edit
-              </button>
+              {editingRate ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    value={rateInput}
+                    onChange={(e) => setRateInput(e.target.value)}
+                    className="input-field py-1.5 text-sm w-20 text-center"
+                    min="0"
+                    max="10000"
+                  />
+                  <button
+                    onClick={() => {
+                      const val = Math.max(0, Math.min(10000, parseInt(rateInput) || 500));
+                      setEarnRate(val);
+                      setEditingRate(false);
+                      setToastMsg(`✅ Loyalty rate updated to ${(val / 100).toFixed(1)}%`);
+                    }}
+                    className="px-3 py-1.5 bg-green-500/20 text-green-400 rounded-lg text-xs font-medium hover:bg-green-500/30"
+                  >
+                    ✓
+                  </button>
+                  <button
+                    onClick={() => { setEditingRate(false); setRateInput(String(earnRate)); }}
+                    className="px-2 py-1.5 text-white/40 hover:text-white/70 text-xs"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => { setEditingRate(true); setRateInput(String(earnRate)); }}
+                  className="px-4 py-2 bg-white/10 text-white/70 rounded-lg text-sm hover:bg-white/20 transition-colors"
+                >
+                  Edit
+                </button>
+              )}
             </div>
+
+            {/* Accepted Currencies */}
             <div className="flex items-center justify-between py-3 border-b border-white/10">
               <div>
                 <p className="text-white font-medium text-sm">Accepted Currencies</p>
-                <p className="text-white/40 text-xs">USDC, VND, JPY, THB, IDR</p>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {activeCurrencies.map(c => (
+                    <span key={c} className="text-[10px] bg-white/10 text-white/50 px-1.5 py-0.5 rounded">
+                      {c}
+                    </span>
+                  ))}
+                </div>
               </div>
-              <button className="px-4 py-2 bg-white/10 text-white/70 rounded-lg text-sm hover:bg-white/20 transition-colors">
-                Manage
-              </button>
+              <div className="flex gap-1 flex-wrap justify-end max-w-[180px]">
+                {['USDC', 'VND', 'JPY', 'THB', 'IDR'].map(c => (
+                  <button
+                    key={c}
+                    onClick={() => {
+                      const updated = activeCurrencies.includes(c)
+                        ? activeCurrencies.filter(x => x !== c)
+                        : [...activeCurrencies, c];
+                      if (updated.length === 0) return; // must have at least 1
+                      setActiveCurrencies(updated);
+                      setToastMsg(`💱 Currencies updated (${updated.length} active)`);
+                    }}
+                    className={`px-2 py-1 text-[10px] rounded transition-colors ${
+                      activeCurrencies.includes(c)
+                        ? 'bg-stellar-primary/30 text-stellar-primary'
+                        : 'bg-white/5 text-white/30 hover:text-white/50'
+                    }`}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
             </div>
+
+            {/* Withdraw Revenue */}
             <div className="flex items-center justify-between py-3">
               <div>
                 <p className="text-white font-medium text-sm">Withdraw Revenue</p>
                 <p className="text-white/40 text-xs">Available: ${formatAmount(analytics?.totalRevenue || 0)}</p>
               </div>
-              <button className="px-4 py-2 bg-stellar-primary/20 text-stellar-primary rounded-lg text-sm font-medium hover:bg-stellar-primary/30 transition-colors">
+              <button
+                onClick={() => setShowWithdrawConfirm(true)}
+                className="px-4 py-2 bg-stellar-primary/20 text-stellar-primary rounded-lg text-sm font-medium hover:bg-stellar-primary/30 transition-colors"
+              >
                 Withdraw
               </button>
             </div>
