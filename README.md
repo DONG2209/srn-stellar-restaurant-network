@@ -379,13 +379,13 @@ vercel --prod
 
 ### Video Demo
 
-[📺 Watch Demo Video (2-3 minutes)](https://drive.google.com/file/d/1PtG3PCtzAFp_rh-mTruKCuoFwPdHY8uQ/view?usp=sharing)
+[📺 Watch Demo Video (2-3 minutes)](https://drive.google.com/file/d/1EykJIkwSkyd7k4Ce3tGfcCJ5OPvk2JrW/view?usp=sharing)
 
 ### Screenshots
 
-| Dashboard | Loyalty | Multi-Currency | Cross-Border |
+| Home | Loyalty | Multi-Currency | Dashboard |
 |---|---|---|---|
-| ![Dashboard](screenshots/dashboard.png) | ![Loyalty](screenshots/loyalty.png) | ![Currency](screenshots/currency.png) | ![CrossBorder](screenshots/crossborder.png) |
+| ![Home](screenshots/dashboard.png) | ![Loyalty](screenshots/loyalty.png) | ![Currency](screenshots/currency.png) | ![Dashboard](screenshots/dashboard.png) |
 
 ---
 
